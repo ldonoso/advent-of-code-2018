@@ -76,19 +76,19 @@ getDurationTasks steps nWorkers extraTime = go [] 0 steps
 
 main :: String -> Int -> Int -> IO ()
 main filename nWorkers extraTime = do
-inh <- openFile filename ReadMode
-inpStr <- hGetContents inh
+    inh <- openFile filename ReadMode
+    inpStr <- hGetContents inh
 
-case (parseInput inpStr) of
-    TT.Failure e -> print e
+    case (parseInput inpStr) of
+        TT.Failure e -> print e
 
-    TT.Success steps -> do
-        let steps' = steps ++ getFinalSteps steps
-        putStr "First solution: "
-        print $ sortTasks steps'
+        TT.Success steps -> do
+            let steps' = steps ++ getFinalSteps steps
+            putStr "First solution: "
+            print $ sortTasks steps'
 
-        putStr "Snd solution: "
-        print $ getDurationTasks steps' nWorkers extraTime
+            putStr "Snd solution: "
+            print $ getDurationTasks steps' nWorkers extraTime
 
-hClose inh
+    hClose inh
 
