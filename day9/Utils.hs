@@ -12,6 +12,9 @@ rotate n xs
         else
             (DS.drop n xs) DS.>< (DS.take n xs)
 
+reduceList :: Int -> [a] -> [a]
+reduceList step xs = [x | (i, x) <- zip [0..] xs, i `mod` step == 0]
+
 test :: IO ()
 test = hspec $ do
     it "Rotate tests" $ do
