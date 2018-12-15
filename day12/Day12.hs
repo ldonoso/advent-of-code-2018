@@ -9,11 +9,12 @@ import Text.Pretty.Simple (pPrint)
 import Data.Maybe
 import Data.Foldable (toList)
 import Debug.Trace (trace)
+import Data.Foldable (foldl')
 
 trace' a = trace (show a) a
 
 type Vals = Seq.Seq Char
-data State = State Vals Int deriving (Show)
+data State = State { vals :: Vals, pos :: Integer } deriving (Show)
 
 valParser :: Parser Char
 valParser = oneOf "#."
@@ -36,20 +37,19 @@ dataParser = do
 slice :: Int -> Int -> Seq.Seq a -> Seq.Seq a
 slice pos width s = Seq.take width $ Seq.drop pos s
 
-tokens :: Vals
-tokens = Seq.fromList "..."
+tokens3 :: Vals
+tokens3 = Seq.fromList "..."
 
-
-extend :: State -> State
-extend = extendRight . extendLeft where
-    extendLeft :: State -> State
-    extendLeft s@(State vals pos)
-        | (slice 0 3 vals) /= tokens = State (tokens Seq.>< vals) (pos + 3)
+normalize :: State -> State
+normalize = normalizeRight . normalizeLeft where
+    normalizeLeft :: State -> State
+    normalizeLeft s@(State vals pos)
+        | (slice 0 3 vals) /= tokens3 = State (tokens3 Seq.>< vals) (pos - 3)
         | otherwise = s
         
-    extendRight :: State -> State
-    extendRight s@(State vals pos)
-        | (slice (subtract 3 (length vals)) 3 vals) /= tokens = State (vals Seq.>< tokens) pos
+    normalizeRight :: State -> State
+    normalizeRight s@(State vals pos)
+        | (slice (subtract 3 (length vals)) 3 vals) /= tokens3 = State (vals Seq.>< tokens3) pos
         | otherwise = s
 
 doEvolution :: RulesMap -> State -> State
@@ -63,16 +63,48 @@ doEvolution rules (State vals pos) = State vals' pos
         vals' = Seq.fromList $ getNew <$> [0..length vals]
 
 play :: RulesMap -> State -> [State]
-play rules s = iterate (doEvolution rules . extend) s
+play rules s = iterate (doEvolution rules . normalize) s
 
-getResult :: State -> Int
+getResult :: State -> Integer
 getResult (State vals pos) =
-    sum $ fmap fst $ filter (\x -> snd x == '#') $ zip [negate pos..] (toList vals)
+    sum $ fmap fst $ filter (\x -> snd x == '#') $ zip [pos..] (toList vals)
 
-solution1 :: Int -> State -> RulesMap -> Int
+solution1 :: Int -> State -> RulesMap -> Integer
 solution1 nIter state rules =
     let states = take nIter $ play rules state
     in getResult $ last states
+
+solution1' :: Int -> State -> RulesMap -> Integer
+solution1' nIter state rules =
+    getResult $
+    foldl' (\acc _ -> doEvolution rules . normalize $ acc) state [1..nIter]
+    
+
+findRep :: State -> RulesMap -> (Integer, State, State)
+findRep state rules = go state 0
+    where
+        removeEmpty s = Seq.dropWhileL (/= '#') $ Seq.dropWhileL (/= '#') s
+        equivalentSeq s1 s2 = removeEmpty s1 == removeEmpty s2
+        go s it
+            | equivalentSeq (vals s) (vals s') = (it, s, s')
+            | otherwise = go (s') (it + 1)
+            where s' = doEvolution rules . normalize $ s
+
+normalize' :: State -> State
+normalize' (State vals pos) = 
+    let (Just pos') = Seq.elemIndexL '#' vals
+    in State (Seq.drop pos' vals) (pos + toInteger pos')
+
+solution2 :: State -> RulesMap -> Integer
+solution2 state rules =
+    let
+        (nIter, s1, s2) = findRep state rules
+        s1' = normalize' s1
+        s2' = normalize' s2
+        diff = (pos s2' - pos s1')
+        posFinal = pos s1' + ((50 * 10^9) - nIter)
+    in getResult (State (vals s1') posFinal)
+
 
 readProblemFile :: String -> IO (State, RulesMap)
 readProblemFile filename = withFile filename ReadMode (\h -> do
@@ -87,17 +119,21 @@ readProblemFile filename = withFile filename ReadMode (\h -> do
 
 test :: IO ()
 test = hspec $ do
-    describe "Solution 1" $ do
-        it "Test" $ do
+    describe "Day 12" $ do
+        it "Test case" $ do
             (state, rules) <- readProblemFile "input_test.txt"
             solution1 21 state rules `shouldBe` 325
 
-        it "Real problem" $ do
+        it "Part 1" $ do
             (state, rules) <- readProblemFile "input.txt"
             solution1 21 state rules `shouldBe` 3410
+
+        it "Part 2" $ do
+            (state, rules) <- readProblemFile "input.txt"
+            solution2 state rules `shouldBe` 4000000001480
 
 
 main :: Int -> String -> IO ()
 main nIter filename = do
     (state, rules) <- readProblemFile filename
-    print $ solution1 nIter state rules
+    print $ solution1' nIter state rules
